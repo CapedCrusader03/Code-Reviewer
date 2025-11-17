@@ -1,11 +1,30 @@
 import express, { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
+import { Kafka } from 'kafkajs';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'default-secret';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
+
+// Initialize Kafka
+const kafka = new Kafka({
+  clientId: 'webhook-service',
+  brokers: [KAFKA_BROKER]
+});
+
+const producer = kafka.producer();
+let producerReady = false;
+
+// Connect Kafka producer
+producer.connect().then(() => {
+  console.log('Kafka producer connected');
+  producerReady = true;
+}).catch(err => {
+  console.error('Failed to connect Kafka producer:', err);
+});
 
 // Capture raw body for signature verification
 app.use(express.json({
@@ -80,27 +99,48 @@ app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Res
     const diff = response.data;
     console.log(`Diff preview (first 200 chars): ${diff.substring(0, 200)}`);
 
-    // Store diff in request for later processing (T015)
-    (req as any).prData = {
+    // Check if Kafka producer is ready
+    if (!producerReady) {
+      console.error('Kafka producer not ready');
+      return res.status(503).json({ error: 'Service temporarily unavailable' });
+    }
+
+    // Generate job ID and prepare Kafka message
+    const job_id = crypto.randomUUID();
+    const kafkaMessage = {
+      job_id,
       repo,
       pr_number,
-      head_sha,
+      commit_sha: head_sha,
       diff
     };
 
+    // Publish to Kafka
+    await producer.send({
+      topic: 'code-review-requests',
+      messages: [
+        {
+          key: job_id,
+          value: JSON.stringify(kafkaMessage)
+        }
+      ]
+    });
+
+    console.log(`Published to Kafka: job_id=${job_id}`);
+
     res.status(202).json({ 
       received: true, 
+      job_id,
       data: { 
         repo, 
         pr_number, 
         head_sha,
-        diff_length: diff.length,
-        diff_preview: diff.substring(0, 200)
+        diff_length: diff.length
       } 
     });
   } catch (error: any) {
-    console.error('Error fetching diff:', error.message);
-    return res.status(500).json({ error: 'Failed to fetch PR diff', details: error.message });
+    console.error('Error processing webhook:', error.message);
+    return res.status(500).json({ error: 'Failed to process webhook', details: error.message });
   }
 });
 
