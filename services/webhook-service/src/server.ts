@@ -1,9 +1,11 @@
 import express, { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import axios from 'axios';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'default-secret';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 
 // Capture raw body for signature verification
 app.use(express.json({
@@ -41,7 +43,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
 });
 
-app.post('/github/webhook', verifyGitHubSignature, (req: Request, res: Response) => {
+app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Response) => {
   const event = req.headers['x-github-event'] as string;
 
   // Only process pull_request events
@@ -64,7 +66,42 @@ app.post('/github/webhook', verifyGitHubSignature, (req: Request, res: Response)
   const extractedData = { repo, pr_number, head_sha };
   console.log(JSON.stringify(extractedData));
 
-  res.status(202).json({ received: true, data: extractedData });
+  try {
+    // Fetch PR diff from GitHub API
+    const diffUrl = `https://api.github.com/repos/${repo}/pulls/${pr_number}`;
+    const response = await axios.get(diffUrl, {
+      headers: {
+        'Accept': 'application/vnd.github.v3.diff',
+        'Authorization': GITHUB_TOKEN ? `Bearer ${GITHUB_TOKEN}` : undefined,
+        'User-Agent': 'AI-Code-Reviewer-Webhook'
+      }
+    });
+
+    const diff = response.data;
+    console.log(`Diff preview (first 200 chars): ${diff.substring(0, 200)}`);
+
+    // Store diff in request for later processing (T015)
+    (req as any).prData = {
+      repo,
+      pr_number,
+      head_sha,
+      diff
+    };
+
+    res.status(202).json({ 
+      received: true, 
+      data: { 
+        repo, 
+        pr_number, 
+        head_sha,
+        diff_length: diff.length,
+        diff_preview: diff.substring(0, 200)
+      } 
+    });
+  } catch (error: any) {
+    console.error('Error fetching diff:', error.message);
+    return res.status(500).json({ error: 'Failed to fetch PR diff', details: error.message });
+  }
 });
 
 app.listen(PORT, () => {
