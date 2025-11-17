@@ -1,5 +1,6 @@
 import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 import db from './db';
+import { callAIService } from './ai-service';
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
 const KAFKA_GROUP_ID = process.env.KAFKA_GROUP_ID || 'orchestrator-service';
@@ -36,8 +37,49 @@ async function processMessage(message: CodeReviewMessage): Promise<void> {
     });
 
     console.log(`Created review ${review_id} with status=running for job ${job_id}`);
+
+    // Call AI service for review
+    console.log(`Calling AI service for review ${review_id}`);
+    const aiResponse = await callAIService(diff);
+
+    // Persist findings
+    if (aiResponse.findings && aiResponse.findings.length > 0) {
+      const findingsToInsert = aiResponse.findings.map(finding => ({
+        review_id,
+        type: finding.type,
+        severity: finding.severity,
+        file_path: finding.file_path || null,
+        line_number: finding.line_number || null,
+        message: finding.message,
+        suggestion: finding.suggestion || null,
+        created_at: db.fn.now()
+      }));
+
+      await db('findings').insert(findingsToInsert);
+      console.log(`Inserted ${findingsToInsert.length} findings for review ${review_id}`);
+    }
+
+    // Update review with quality score
+    await db('reviews')
+      .where({ id: review_id })
+      .update({
+        quality_score: aiResponse.quality_score,
+        status: 'done'
+      });
+
+    console.log(`Completed review ${review_id} with quality score ${aiResponse.quality_score}`);
   } catch (error: any) {
     console.error(`Error processing message for job ${job_id}:`, error.message);
+    
+    // Try to mark the review as failed in DB if it was created
+    try {
+      await db('reviews')
+        .where({ job_id })
+        .update({ status: 'failed' });
+    } catch (dbError) {
+      console.error('Failed to update review status to failed:', dbError);
+    }
+    
     throw error;
   }
 }
