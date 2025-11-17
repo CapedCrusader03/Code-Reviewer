@@ -1,0 +1,25 @@
+{
+  "action": "opened",
+  "number": 42,
+  "pull_request": {
+    "number": 42,
+    "state": "open",
+    "title": "Add new feature",
+    "head": {
+      "sha": "abc123def456",
+      "ref": "feature-branch"
+    },
+    "base": {
+      "sha": "main123",
+      "ref": "main"
+    }
+  },
+  "repository": {
+    "full_name": "testorg/test-repo",
+    "name": "test-repo",
+    "owner": {
+      "login": "testorg"
+    }
+  }
+}
+

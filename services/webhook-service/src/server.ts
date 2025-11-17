@@ -5,7 +5,12 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'default-secret';
 
-app.use(express.json());
+// Capture raw body for signature verification
+app.use(express.json({
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 
 // HMAC signature verification middleware
 const verifyGitHubSignature = (req: Request, res: Response, next: NextFunction) => {
@@ -15,7 +20,7 @@ const verifyGitHubSignature = (req: Request, res: Response, next: NextFunction) 
     return res.status(401).json({ error: 'No signature provided' });
   }
 
-  const body = JSON.stringify(req.body);
+  const body = (req as any).rawBody || JSON.stringify(req.body);
   const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
   hmac.update(body);
   const expectedSignature = `sha256=${hmac.digest('hex')}`;
@@ -37,7 +42,29 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 app.post('/github/webhook', verifyGitHubSignature, (req: Request, res: Response) => {
-  res.status(200).json({ received: true });
+  const event = req.headers['x-github-event'] as string;
+
+  // Only process pull_request events
+  if (event !== 'pull_request') {
+    return res.status(200).json({ received: true, message: 'Event ignored' });
+  }
+
+  const payload = req.body;
+  
+  // Extract required fields
+  const repo = payload.repository?.full_name;
+  const pr_number = payload.pull_request?.number;
+  const head_sha = payload.pull_request?.head?.sha;
+
+  if (!repo || !pr_number || !head_sha) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Log extracted data
+  const extractedData = { repo, pr_number, head_sha };
+  console.log(JSON.stringify(extractedData));
+
+  res.status(202).json({ received: true, data: extractedData });
 });
 
 app.listen(PORT, () => {
