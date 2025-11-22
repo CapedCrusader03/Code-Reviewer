@@ -64,8 +64,7 @@ async function processMessage(message: CodeReviewMessage): Promise<void> {
     await db('reviews')
       .where({ id: review_id })
       .update({
-        quality_score: aiResponse.quality_score,
-        status: 'done'
+        quality_score: aiResponse.quality_score
       });
 
     console.log(`Completed review ${review_id} with quality score ${aiResponse.quality_score}`);
@@ -84,6 +83,16 @@ async function processMessage(message: CodeReviewMessage): Promise<void> {
     } else {
       console.log(`Skipped GitHub comment for review ${review_id} (no token or error)`);
     }
+
+    // Mark review as done and set completed_at timestamp
+    await db('reviews')
+      .where({ id: review_id })
+      .update({
+        status: 'done',
+        completed_at: db.fn.now()
+      });
+
+    console.log(`Marked review ${review_id} as done with completed_at timestamp`);
   } catch (error: any) {
     console.error(`Error processing message for job ${job_id}:`, error.message);
     
