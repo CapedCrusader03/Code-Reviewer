@@ -33,5 +33,4 @@ npm-debug.log*
 coverage/
 .nyc_output/
 
-architecture.md
-tasks.md
+*.md

@@ -1,6 +1,7 @@
 import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 import db from './db';
 import { callAIService } from './ai-service';
+import { postGitHubComment } from './github-service';
 
 const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
 const KAFKA_GROUP_ID = process.env.KAFKA_GROUP_ID || 'orchestrator-service';
@@ -68,6 +69,21 @@ async function processMessage(message: CodeReviewMessage): Promise<void> {
       });
 
     console.log(`Completed review ${review_id} with quality score ${aiResponse.quality_score}`);
+
+    // Post comment to GitHub with top 3 suggestions
+    const commentId = await postGitHubComment({
+      review_id,
+      repo,
+      pr_number,
+      quality_score: aiResponse.quality_score,
+      findings: aiResponse.findings
+    });
+
+    if (commentId) {
+      console.log(`Posted GitHub comment ${commentId} for review ${review_id}`);
+    } else {
+      console.log(`Skipped GitHub comment for review ${review_id} (no token or error)`);
+    }
   } catch (error: any) {
     console.error(`Error processing message for job ${job_id}:`, error.message);
     
