@@ -1,7 +1,9 @@
 import logging
+import uuid
 from fastapi import FastAPI
 from app.schemas import ReviewRequest, ReviewResponse, Finding
 from app.llm import llm_run
+from app.s3_utils import upload_plantuml
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,6 +37,19 @@ Return the response in JSON format."""
     logger.info("Calling llm_run with prompt")
     llm_result = llm_run(prompt)
     
+    # Get PlantUML text
+    plantuml_text = llm_result.get("plantuml", "@startuml\n@enduml")
+    
+    # Upload PlantUML to S3
+    job_id = str(uuid.uuid4())
+    logger.info("Uploading PlantUML to S3 with job_id: %s", job_id)
+    uml_s3_url = upload_plantuml(plantuml_text, job_id=job_id)
+    
+    if uml_s3_url:
+        logger.info("PlantUML uploaded successfully: %s", uml_s3_url)
+    else:
+        logger.warning("Failed to upload PlantUML to S3, continuing without S3 URL")
+    
     # Convert LLM result to ReviewResponse
     findings = [
         Finding(
@@ -51,7 +66,7 @@ Return the response in JSON format."""
     return ReviewResponse(
         quality_score=llm_result.get("quality_score", 80),
         findings=findings,
-        plantuml=llm_result.get("plantuml", "@startuml\n@enduml"),
-        uml_s3_url=None
+        plantuml=plantuml_text,
+        uml_s3_url=uml_s3_url
     )
 
