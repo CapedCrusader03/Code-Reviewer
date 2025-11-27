@@ -178,7 +178,7 @@ async function getChangedFiles(repoPath: string, baseSha: string, headSha: strin
   try {
     const git = simpleGit(repoPath);
     const diff = await git.diff([baseSha, headSha, '--name-only']);
-    return diff.split('\n').filter(file => file.trim().length > 0);
+    return diff.split('\n').filter((file: string) => file.trim().length > 0);
   } catch (error: any) {
     console.error(`Error getting changed files: ${error.message}`);
     return [];
