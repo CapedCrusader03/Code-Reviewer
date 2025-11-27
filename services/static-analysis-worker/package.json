@@ -8,7 +8,10 @@
     "start": "node dist/run.js"
   },
   "dependencies": {
-    "simple-git": "^3.20.0"
+    "simple-git": "^3.20.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
