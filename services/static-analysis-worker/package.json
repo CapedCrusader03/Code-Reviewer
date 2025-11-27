@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/run.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "simple-git": "^3.20.0"
+  },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "typescript": "^5.3.3"
