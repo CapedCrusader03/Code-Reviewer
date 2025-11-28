@@ -12,6 +12,7 @@ const kafka = new Kafka({
 });
 
 const consumer: Consumer = kafka.consumer({ groupId: KAFKA_GROUP_ID });
+const staticAnalysisConsumer: Consumer = kafka.consumer({ groupId: `${KAFKA_GROUP_ID}-static-analysis` });
 
 interface CodeReviewMessage {
   job_id: string;
@@ -146,6 +147,76 @@ export async function startKafkaConsumer(): Promise<void> {
 
 export async function stopKafkaConsumer(): Promise<void> {
   await consumer.disconnect();
-  console.log('Kafka consumer disconnected');
+  await staticAnalysisConsumer.disconnect();
+  console.log('Kafka consumers disconnected');
+}
+
+interface StaticAnalysisMessage {
+  job_id: string;
+  static_metrics: any;
+}
+
+async function processStaticAnalysisMessage(message: StaticAnalysisMessage): Promise<void> {
+  const { job_id, static_metrics } = message;
+
+  console.log(`Processing static analysis results for job: ${job_id}`);
+
+  try {
+    // Update reviews table with static_metrics for the corresponding job_id
+    const updated = await db('reviews')
+      .where({ job_id })
+      .update({
+        static_metrics: JSON.stringify(static_metrics)
+      });
+
+    if (updated === 0) {
+      console.warn(`No review found with job_id: ${job_id}`);
+    } else {
+      console.log(`Updated static_metrics for job ${job_id}`);
+    }
+  } catch (error: any) {
+    console.error(`Error processing static analysis results for job ${job_id}:`, error.message);
+    throw error;
+  }
+}
+
+async function handleStaticAnalysisMessage({ topic, partition, message }: EachMessagePayload): Promise<void> {
+  const value = message.value?.toString();
+  
+  console.log(`Received message on topic: ${topic}, partition: ${partition}, offset: ${message.offset}`);
+  
+  if (!value) {
+    console.error('Received empty static analysis message');
+    return;
+  }
+
+  try {
+    console.log(`Parsing static analysis message: ${value.substring(0, 100)}...`);
+    const staticAnalysisResult: StaticAnalysisMessage = JSON.parse(value);
+    console.log(`Parsed message - job_id: ${staticAnalysisResult.job_id}`);
+    await processStaticAnalysisMessage(staticAnalysisResult);
+  } catch (error: any) {
+    console.error('Error handling static analysis message:', error.message);
+    console.error('Error stack:', error.stack);
+  }
+}
+
+export async function startStaticAnalysisConsumer(): Promise<void> {
+  try {
+    await staticAnalysisConsumer.connect();
+    console.log('Static analysis Kafka consumer connected');
+
+    await staticAnalysisConsumer.subscribe({ topic: 'static-analysis-results', fromBeginning: true });
+    console.log('Subscribed to topic: static-analysis-results');
+
+    await staticAnalysisConsumer.run({
+      eachMessage: handleStaticAnalysisMessage
+    });
+
+    console.log('Static analysis Kafka consumer started');
+  } catch (error) {
+    console.error('Failed to start static analysis Kafka consumer:', error);
+    throw error;
+  }
 }
 
