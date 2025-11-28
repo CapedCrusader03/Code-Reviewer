@@ -1,7 +1,67 @@
 import { NextPage } from 'next'
 import Head from 'next/head'
+import { useState, useEffect } from 'react'
+
+interface Review {
+  id: number
+  repo: string
+  pr_number: number
+  status: string
+  quality_score: number | null
+  created_at: string
+}
+
+const ORCHESTRATOR_URL = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:5000'
 
 const Home: NextPage = () => {
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchReviews()
+  }, [])
+
+  const fetchReviews = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch(`${ORCHESTRATOR_URL}/internal/reviews`)
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch reviews: ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      setReviews(data)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load reviews')
+      console.error('Error fetching reviews:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleString()
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'done':
+        return '#10b981' // green
+      case 'running':
+        return '#3b82f6' // blue
+      case 'pending':
+        return '#f59e0b' // amber
+      case 'failed':
+        return '#ef4444' // red
+      default:
+        return '#6b7280' // gray
+    }
+  }
+
   return (
     <>
       <Head>
@@ -12,29 +72,172 @@ const Home: NextPage = () => {
       </Head>
       <main style={{
         minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         padding: '2rem',
-        fontFamily: 'system-ui, -apple-system, sans-serif'
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        backgroundColor: '#f9fafb'
       }}>
-        <h1 style={{
-          fontSize: '2.5rem',
-          fontWeight: 'bold',
-          marginBottom: '1rem',
-          color: '#1a1a1a'
-        }}>
-          AI Code Reviewer Dashboard
-        </h1>
-        <p style={{
-          fontSize: '1.2rem',
-          color: '#666',
-          textAlign: 'center',
-          maxWidth: '600px'
-        }}>
-          Welcome to the AI Code Reviewer Dashboard. Review management interface coming soon.
-        </p>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <h1 style={{
+            fontSize: '2.5rem',
+            fontWeight: 'bold',
+            marginBottom: '2rem',
+            color: '#1a1a1a'
+          }}>
+            AI Code Reviewer Dashboard
+          </h1>
+
+          {loading && (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <p style={{ color: '#6b7280' }}>Loading reviews...</p>
+            </div>
+          )}
+
+          {error && (
+            <div style={{
+              padding: '1rem',
+              backgroundColor: '#fee2e2',
+              border: '1px solid #fecaca',
+              borderRadius: '0.5rem',
+              marginBottom: '1rem',
+              color: '#991b1b'
+            }}>
+              <strong>Error:</strong> {error}
+              <button
+                onClick={fetchReviews}
+                style={{
+                  marginLeft: '1rem',
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.25rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && (
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '0.5rem',
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+              overflow: 'hidden'
+            }}>
+              {reviews.length === 0 ? (
+                <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+                  <p>No reviews found.</p>
+                </div>
+              ) : (
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse'
+                }}>
+                  <thead>
+                    <tr style={{
+                      backgroundColor: '#f3f4f6',
+                      borderBottom: '2px solid #e5e7eb'
+                    }}>
+                      <th style={{
+                        padding: '1rem',
+                        textAlign: 'left',
+                        fontWeight: '600',
+                        color: '#374151',
+                        fontSize: '0.875rem',
+                        textTransform: 'uppercase'
+                      }}>ID</th>
+                      <th style={{
+                        padding: '1rem',
+                        textAlign: 'left',
+                        fontWeight: '600',
+                        color: '#374151',
+                        fontSize: '0.875rem',
+                        textTransform: 'uppercase'
+                      }}>Repo</th>
+                      <th style={{
+                        padding: '1rem',
+                        textAlign: 'left',
+                        fontWeight: '600',
+                        color: '#374151',
+                        fontSize: '0.875rem',
+                        textTransform: 'uppercase'
+                      }}>PR</th>
+                      <th style={{
+                        padding: '1rem',
+                        textAlign: 'left',
+                        fontWeight: '600',
+                        color: '#374151',
+                        fontSize: '0.875rem',
+                        textTransform: 'uppercase'
+                      }}>Score</th>
+                      <th style={{
+                        padding: '1rem',
+                        textAlign: 'left',
+                        fontWeight: '600',
+                        color: '#374151',
+                        fontSize: '0.875rem',
+                        textTransform: 'uppercase'
+                      }}>Status</th>
+                      <th style={{
+                        padding: '1rem',
+                        textAlign: 'left',
+                        fontWeight: '600',
+                        color: '#374151',
+                        fontSize: '0.875rem',
+                        textTransform: 'uppercase'
+                      }}>Created At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reviews.map((review, index) => (
+                      <tr
+                        key={review.id}
+                        style={{
+                          borderBottom: '1px solid #e5e7eb',
+                          backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb'
+                        }}
+                      >
+                        <td style={{ padding: '1rem', color: '#1f2937' }}>{review.id}</td>
+                        <td style={{ padding: '1rem', color: '#1f2937' }}>{review.repo}</td>
+                        <td style={{ padding: '1rem', color: '#1f2937' }}>#{review.pr_number}</td>
+                        <td style={{ padding: '1rem', color: '#1f2937' }}>
+                          {review.quality_score !== null ? (
+                            <span style={{
+                              fontWeight: '600',
+                              color: review.quality_score >= 80 ? '#10b981' : review.quality_score >= 60 ? '#f59e0b' : '#ef4444'
+                            }}>
+                              {review.quality_score}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#9ca3af' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '1rem' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.875rem',
+                            fontWeight: '500',
+                            backgroundColor: `${getStatusColor(review.status)}20`,
+                            color: getStatusColor(review.status)
+                          }}>
+                            {review.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '1rem', color: '#6b7280', fontSize: '0.875rem' }}>
+                          {formatDate(review.created_at)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
       </main>
     </>
   )
