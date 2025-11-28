@@ -1,6 +1,7 @@
 import { NextPage } from 'next'
 import Head from 'next/head'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Review {
   id: number
@@ -196,7 +197,18 @@ const Home: NextPage = () => {
                         key={review.id}
                         style={{
                           borderBottom: '1px solid #e5e7eb',
-                          backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb'
+                          backgroundColor: index % 2 === 0 ? 'white' : '#f9fafb',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#eff6ff'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'white' : '#f9fafb'
+                        }}
+                        onClick={() => {
+                          window.location.href = `/reviews/${review.id}`
                         }}
                       >
                         <td style={{ padding: '1rem', color: '#1f2937' }}>{review.id}</td>
