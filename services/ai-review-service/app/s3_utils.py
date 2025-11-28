@@ -94,3 +94,4 @@ def upload_plantuml(plantuml_text: str, job_id: str = None) -> str:
         logger.error("Failed to upload PlantUML to S3: %s", str(e))
         return None
 
+

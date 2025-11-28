@@ -10,3 +10,4 @@ RUN npm run build
 
 CMD ["node", "dist/run.js"]
 
+

@@ -72,6 +72,10 @@ app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Res
 
   const payload = req.body;
   
+  // Debug: Log payload keys to see what's available
+  console.log('Payload keys:', Object.keys(payload));
+  console.log('Has diff in payload?', !!payload.diff);
+  
   // Extract required fields
   const repo = payload.repository?.full_name;
   const pr_number = payload.pull_request?.number;
@@ -86,17 +90,36 @@ app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Res
   console.log(JSON.stringify(extractedData));
 
   try {
-    // Fetch PR diff from GitHub API
-    const diffUrl = `https://api.github.com/repos/${repo}/pulls/${pr_number}`;
-    const response = await axios.get(diffUrl, {
-      headers: {
-        'Accept': 'application/vnd.github.v3.diff',
-        'Authorization': GITHUB_TOKEN ? `Bearer ${GITHUB_TOKEN}` : undefined,
-        'User-Agent': 'AI-Code-Reviewer-Webhook'
+    // Check if diff is provided in payload (for testing)
+    let diff: string;
+    
+    // Check for diff in payload (for testing/smoke tests)
+    if (payload.diff && typeof payload.diff === 'string') {
+      diff = payload.diff;
+      console.log('Using diff from payload (test mode)');
+      console.log(`Diff length: ${diff.length} chars`);
+    } else {
+      // Fetch PR diff from GitHub API
+      console.log(`Fetching diff from GitHub API for ${repo}#${pr_number}`);
+      const diffUrl = `https://api.github.com/repos/${repo}/pulls/${pr_number}`;
+      try {
+        const response = await axios.get(diffUrl, {
+          headers: {
+            'Accept': 'application/vnd.github.v3.diff',
+            'Authorization': GITHUB_TOKEN ? `Bearer ${GITHUB_TOKEN}` : undefined,
+            'User-Agent': 'AI-Code-Reviewer-Webhook'
+          }
+        });
+        diff = response.data;
+      } catch (axiosError: any) {
+        console.error('Failed to fetch diff from GitHub:', axiosError.message);
+        if (axiosError.response) {
+          console.error(`GitHub API returned ${axiosError.response.status}: ${axiosError.response.statusText}`);
+        }
+        throw axiosError;
       }
-    });
-
-    const diff = response.data;
+    }
+    
     console.log(`Diff preview (first 200 chars): ${diff.substring(0, 200)}`);
 
     // Check if Kafka producer is ready
@@ -140,7 +163,14 @@ app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Res
     });
   } catch (error: any) {
     console.error('Error processing webhook:', error.message);
-    return res.status(500).json({ error: 'Failed to process webhook', details: error.message });
+    if (error.response) {
+      console.error(`HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}`);
+    }
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({ 
+      error: 'Failed to process webhook', 
+      details: error.response ? `Request failed with status code ${error.response.status}` : error.message 
+    });
   }
 });
 

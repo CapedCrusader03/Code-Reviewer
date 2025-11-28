@@ -32,5 +32,26 @@ npm-debug.log*
 # Testing
 coverage/
 .nyc_output/
+test-*.js
+test-*.ts
+test-*.py
+*test*.js
+*test*.ts
+*test*.py
+TEST-*.md
+
+# Allow important test scripts
+!scripts/e2e-smoke-test.js
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Temporary scripts
+*.ps1
+restart-*.ps1
 
 *.md
