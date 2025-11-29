@@ -46,10 +46,36 @@ async function processMessage(message: CodeReviewMessage): Promise<void> {
 
     // Persist findings
     if (aiResponse.findings && aiResponse.findings.length > 0) {
+      // Valid enum values for type and severity
+      const validTypes = ['code_smell', 'security_issue', 'suggestion', 'best_practice'];
+      const validSeverities = ['low', 'medium', 'high', 'critical'];
+      
+      // Normalize finding types and severities to match database enum
+      const normalizeType = (type: string): string => {
+        const lowerType = type.toLowerCase();
+        // Map common variations to valid types
+        if (lowerType.includes('error') || lowerType.includes('issue') || lowerType.includes('bug')) {
+          return 'code_smell';
+        }
+        if (lowerType.includes('security') || lowerType.includes('vulnerability')) {
+          return 'security_issue';
+        }
+        if (lowerType.includes('best') || lowerType.includes('practice') || lowerType.includes('pattern')) {
+          return 'best_practice';
+        }
+        // Default to suggestion if not recognized
+        return validTypes.includes(lowerType) ? lowerType : 'suggestion';
+      };
+      
+      const normalizeSeverity = (severity: string): string => {
+        const lowerSeverity = severity.toLowerCase();
+        return validSeverities.includes(lowerSeverity) ? lowerSeverity : 'low';
+      };
+      
       const findingsToInsert = aiResponse.findings.map(finding => ({
         review_id,
-        type: finding.type,
-        severity: finding.severity,
+        type: normalizeType(finding.type),
+        severity: normalizeSeverity(finding.severity),
         file_path: finding.file_path || null,
         line_number: finding.line_number || null,
         message: finding.message,

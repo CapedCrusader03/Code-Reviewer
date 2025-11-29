@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Kafka } from 'kafkajs';
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = parseInt(process.env.PORT || '4000', 10);
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'default-secret';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
@@ -111,6 +111,137 @@ app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Res
           }
         });
         diff = response.data;
+        
+        // Check if diff contains binary file markers
+        const hasBinaryMarker = /Binary files .* differ/.test(diff);
+        if (hasBinaryMarker) {
+          console.log('Diff contains binary file markers, fetching file contents...');
+          console.log(`GITHUB_TOKEN is ${GITHUB_TOKEN ? 'set' : 'NOT set'}`);
+          
+          if (!GITHUB_TOKEN) {
+            console.error('⚠️ GITHUB_TOKEN not set! Cannot fetch file contents. Set it with: $env:GITHUB_TOKEN="your-token"');
+            // Continue with original diff - it's better than nothing
+          } else {
+            try {
+              // Fetch PR files to get list of changed files
+              const filesUrl = `https://api.github.com/repos/${repo}/pulls/${pr_number}/files`;
+              const filesResponse = await axios.get(filesUrl, {
+                headers: {
+                  'Accept': 'application/vnd.github.v3+json',
+                  'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                  'User-Agent': 'AI-Code-Reviewer-Webhook'
+                }
+              });
+              
+              const files = filesResponse.data;
+              const baseSha = payload.pull_request?.base?.sha;
+              const headSha = payload.pull_request?.head?.sha;
+              
+              // Reconstruct diff with actual file contents
+              const diffParts: string[] = [];
+              
+              for (const file of files) {
+                // Skip removed files
+                if (file.status === 'removed') {
+                  console.log(`Skipping removed file: ${file.filename}`);
+                  continue;
+                }
+                
+                // Skip binary files
+                if (file.binary) {
+                  console.log(`Skipping binary file: ${file.filename}`);
+                  continue;
+                }
+                
+                console.log(`Processing file: ${file.filename} (status: ${file.status}, binary: ${file.binary})`);
+                
+                // Use patch if available (works for both new and modified files)
+                if (file.patch) {
+                  console.log(`Using patch for ${file.filename} (${file.patch.length} chars)`);
+                  // Add diff header
+                  diffParts.push(`diff --git a/${file.filename} b/${file.filename}`);
+                  if (file.status === 'added') {
+                    diffParts.push(`new file mode 100644`);
+                  }
+                  diffParts.push(file.patch);
+                } else if (file.status === 'added' || file.status === 'renamed') {
+                  // For new/renamed files without patch, fetch content
+                  console.log(`Fetching content for ${file.filename} (no patch available)`);
+                  try {
+                    const contentUrl = `https://api.github.com/repos/${repo}/contents/${file.filename}?ref=${headSha}`;
+                    console.log(`Fetching from: ${contentUrl}`);
+                    const contentResponse = await axios.get(contentUrl, {
+                      headers: {
+                        'Accept': 'application/vnd.github.v3.raw',
+                        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                        'User-Agent': 'AI-Code-Reviewer-Webhook'
+                      }
+                    });
+                    
+                    const fileContent = typeof contentResponse.data === 'string' 
+                      ? contentResponse.data 
+                      : Buffer.from(contentResponse.data.content, 'base64').toString('utf-8');
+                    
+                    console.log(`Fetched ${fileContent.length} chars for ${file.filename}`);
+                    
+                    // Create a proper diff for new file
+                    diffParts.push(`diff --git a/${file.filename} b/${file.filename}`);
+                    diffParts.push(`new file mode 100644`);
+                    diffParts.push(`index 0000000..${headSha.substring(0, 7)}`);
+                    diffParts.push(`--- /dev/null`);
+                    diffParts.push(`+++ b/${file.filename}`);
+                    
+                    // Add file content with + prefix
+                    const lines = fileContent.split('\n');
+                    for (const line of lines) {
+                      diffParts.push(`+${line}`);
+                    }
+                    console.log(`Added ${lines.length} lines to diff for ${file.filename}`);
+                  } catch (contentError: any) {
+                    console.error(`Failed to fetch content for ${file.filename}: ${contentError.message}`);
+                    if (contentError.response) {
+                      console.error(`GitHub API returned ${contentError.response.status}: ${JSON.stringify(contentError.response.data)}`);
+                    }
+                  }
+                } else if (file.status === 'modified') {
+                  console.log(`Modified file ${file.filename} has no patch, using original diff`);
+                  // Try to extract from original diff
+                  const originalDiffLines = diff.split('\n');
+                  let inFile = false;
+                  const fileDiffLines: string[] = [];
+                  
+                  for (const line of originalDiffLines) {
+                    if (line.includes(`diff --git`) && line.includes(file.filename)) {
+                      inFile = true;
+                      fileDiffLines.push(line);
+                    } else if (inFile && line.startsWith('diff --git')) {
+                      break; // Next file
+                    } else if (inFile) {
+                      fileDiffLines.push(line);
+                    }
+                  }
+                  
+                  if (fileDiffLines.length > 0) {
+                    diffParts.push(...fileDiffLines);
+                  }
+                }
+              }
+              
+              if (diffParts.length > 0) {
+                diff = diffParts.join('\n');
+                console.log(`Reconstructed diff with file contents (${diff.length} chars)`);
+              } else {
+                console.warn('Could not reconstruct diff, using original');
+              }
+            } catch (filesError: any) {
+              console.error(`Failed to fetch PR files: ${filesError.message}`);
+              if (filesError.response) {
+                console.error(`GitHub API returned ${filesError.response.status}: ${JSON.stringify(filesError.response.data)}`);
+              }
+              // Continue with original diff
+            }
+          }
+        }
       } catch (axiosError: any) {
         console.error('Failed to fetch diff from GitHub:', axiosError.message);
         if (axiosError.response) {
@@ -174,7 +305,17 @@ app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Res
   }
 });
 
-app.listen(PORT, () => {
+// Listen on all interfaces to allow ngrok access
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Webhook service listening on port ${PORT}`);
+  console.log(`Accessible at http://localhost:${PORT} and via ngrok`);
+});
+
+// Handle server errors
+server.on('error', (err: any) => {
+  console.error('Server error:', err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+  }
 });
 

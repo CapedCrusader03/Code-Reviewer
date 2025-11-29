@@ -72,10 +72,13 @@ def upload_plantuml(plantuml_text: str, job_id: str = None) -> str:
         s3_client = get_s3_client()
         
         # Upload PlantUML text
+        # Convert to bytes explicitly to avoid LocalStack compatibility issues
+        plantuml_bytes = plantuml_text.encode('utf-8') if isinstance(plantuml_text, str) else plantuml_text
+        
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=filename,
-            Body=plantuml_text.encode('utf-8'),
+            Body=plantuml_bytes,
             ContentType='text/plain'
         )
         

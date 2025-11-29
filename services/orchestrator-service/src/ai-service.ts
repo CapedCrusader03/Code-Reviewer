@@ -24,15 +24,16 @@ interface AIReviewResponse {
 }
 
 export async function callAIService(diff: string, static_metrics?: any): Promise<AIReviewResponse> {
-  // TODO: Replace this mock with actual AI service call when T030 is implemented
-  // For now, return mock data to test the orchestrator flow
-  
-  const useMock = process.env.USE_MOCK_AI === 'true' || !process.env.AI_SERVICE_URL;
+  // Check if mock mode is explicitly enabled
+  const useMock = process.env.USE_MOCK_AI === 'true';
   
   if (useMock) {
-    console.log('Using mock AI service response (set AI_SERVICE_URL to use real service)');
+    console.log('Using mock AI service response (USE_MOCK_AI=true)');
     return getMockAIResponse(diff);
   }
+  
+  // Use the AI service URL (defaults to http://localhost:8001)
+  console.log(`Calling AI service at ${AI_SERVICE_URL}/review`);
 
   try {
     const response = await axios.post<AIReviewResponse>(
