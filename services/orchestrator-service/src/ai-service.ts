@@ -1,6 +1,7 @@
 import axios from 'axios';
+import config from './config';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+const AI_SERVICE_URL = config.aiServiceUrl;
 
 interface AIReviewRequest {
   diff: string;
@@ -25,7 +26,7 @@ interface AIReviewResponse {
 
 export async function callAIService(diff: string, static_metrics?: any): Promise<AIReviewResponse> {
   // Check if mock mode is explicitly enabled
-  const useMock = process.env.USE_MOCK_AI === 'true';
+  const useMock = config.useMockAI;
   
   if (useMock) {
     console.log('Using mock AI service response (USE_MOCK_AI=true)');

@@ -3,13 +3,14 @@ import cors from 'cors';
 import { testConnection } from './db';
 import reviewsRouter from './routes/reviews';
 import { startKafkaConsumer, startStaticAnalysisConsumer } from './kafka-consumer';
+import config from './config';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 
 // CORS configuration - allow requests from dashboard
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: config.corsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

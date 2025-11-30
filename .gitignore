@@ -55,3 +55,6 @@ __pycache__/
 restart-*.ps1
 
 *.md
+
+*.txt
+*.keep

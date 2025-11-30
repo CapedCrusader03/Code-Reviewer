@@ -2,12 +2,13 @@ import express, { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import axios from 'axios';
 import { Kafka } from 'kafkajs';
+import config from './config';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '4000', 10);
-const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || 'default-secret';
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
-const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
+const PORT = config.port;
+const WEBHOOK_SECRET = config.webhookSecret;
+const GITHUB_TOKEN = config.githubToken;
+const KAFKA_BROKER = config.kafkaBroker;
 
 // Initialize Kafka
 const kafka = new Kafka({

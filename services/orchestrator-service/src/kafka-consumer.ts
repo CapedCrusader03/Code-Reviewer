@@ -2,9 +2,10 @@ import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
 import db from './db';
 import { callAIService } from './ai-service';
 import { postGitHubComment } from './github-service';
+import config from './config';
 
-const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
-const KAFKA_GROUP_ID = process.env.KAFKA_GROUP_ID || 'orchestrator-service';
+const KAFKA_BROKER = config.kafkaBroker;
+const KAFKA_GROUP_ID = config.kafkaGroupId;
 
 const kafka = new Kafka({
   clientId: 'orchestrator-service',

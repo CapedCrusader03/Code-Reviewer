@@ -1,13 +1,14 @@
 import knex, { Knex } from 'knex';
+import config from './config';
 
-const config: Knex.Config = {
+const knexConfig: Knex.Config = {
   client: 'mysql2',
   connection: {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '3308'),
-    user: process.env.DB_USER || 'reviewer',
-    password: process.env.DB_PASSWORD || 'reviewerpass',
-    database: process.env.DB_NAME || 'code_reviewer'
+    host: config.database.host,
+    port: config.database.port,
+    user: config.database.user,
+    password: config.database.password,
+    database: config.database.database
   },
   pool: {
     min: 2,
@@ -15,7 +16,7 @@ const config: Knex.Config = {
   }
 };
 
-const db = knex(config);
+const db = knex(knexConfig);
 
 // Test connection
 export async function testConnection(): Promise<void> {

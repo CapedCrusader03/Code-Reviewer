@@ -1,7 +1,8 @@
 import axios from 'axios';
 import db from './db';
+import config from './config';
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const GITHUB_TOKEN = config.githubToken;
 const GITHUB_API_BASE = 'https://api.github.com';
 
 interface Finding {

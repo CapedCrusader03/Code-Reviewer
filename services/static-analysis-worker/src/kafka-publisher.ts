@@ -1,6 +1,7 @@
 import { Kafka, Producer } from 'kafkajs';
+import config from './config';
 
-const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
+const KAFKA_BROKER = config.kafkaBroker;
 
 const kafka = new Kafka({
   clientId: 'static-analysis-worker',
