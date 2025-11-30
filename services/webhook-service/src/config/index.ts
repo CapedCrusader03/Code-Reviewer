@@ -1,6 +1,7 @@
 /**
  * Centralized configuration loader for webhook-service
  * Validates required environment variables and exports typed config
+ * Supports AWS Secrets Manager (stubbed for MVP)
  */
 
 interface WebhookConfig {
@@ -8,6 +9,11 @@ interface WebhookConfig {
   webhookSecret: string;
   githubToken: string;
   kafkaBroker: string;
+  secrets: {
+    useAwsSecrets: boolean;
+    awsRegion?: string;
+    secretName?: string;
+  };
 }
 
 function getEnvVar(name: string, defaultValue?: string): string {
@@ -33,14 +39,34 @@ function getEnvVarAsNumber(name: string, defaultValue: number): number {
   return num;
 }
 
+function getEnvVarAsBoolean(name: string, defaultValue: boolean): boolean {
+  const value = process.env[name];
+  if (!value) {
+    return defaultValue;
+  }
+  return value.toLowerCase() === 'true';
+}
+
 export function loadConfig(): WebhookConfig {
-  // KAFKA_BROKER is required (no default for production)
-  // Other vars have defaults for local development
+  const useAwsSecrets = getEnvVarAsBoolean('USE_AWS_SECRETS', false);
+  
+  // For MVP, we use env vars only (AWS Secrets Manager is stubbed)
+  // In production, this would call getSecret() when useAwsSecrets=true
+  if (useAwsSecrets) {
+    console.warn('⚠️  USE_AWS_SECRETS=true is set, but AWS Secrets Manager is not fully implemented for MVP');
+    console.warn('   Falling back to environment variables. Set USE_AWS_SECRETS=false to suppress this warning.');
+  }
+
   return {
     port: getEnvVarAsNumber('PORT', 4000),
     webhookSecret: getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret'),
     githubToken: getEnvVar('GITHUB_TOKEN', ''), // Optional, but warn if not set
-    kafkaBroker: getEnvVar('KAFKA_BROKER', 'localhost:9092') // Has default for local dev
+    kafkaBroker: getEnvVar('KAFKA_BROKER', 'localhost:9092'), // Has default for local dev
+    secrets: {
+      useAwsSecrets,
+      awsRegion: process.env.AWS_REGION,
+      secretName: process.env.SECRET_NAME
+    }
   };
 }
 
