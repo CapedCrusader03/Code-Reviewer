@@ -43,6 +43,12 @@ TEST-*.md
 # Allow important test scripts
 !scripts/e2e-smoke-test.js
 
+# Allow test files in __tests__ directories (Jest convention)
+!**/__tests__/**/*.test.ts
+!**/__tests__/**/*.spec.ts
+!**/__tests__/**/*.test.js
+!**/__tests__/**/*.spec.js
+
 # Python
 __pycache__/
 *.pyc

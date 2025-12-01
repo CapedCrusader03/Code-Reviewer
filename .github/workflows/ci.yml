@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master, mvp]
+  push:
+    branches: [main, master, mvp]
+
+jobs:
+  # Build and test TypeScript services
+  typescript-services:
+    name: TypeScript Services
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        service:
+          - orchestrator-service
+          - webhook-service
+          - static-analysis-worker
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm install
+      
+      - name: Build TypeScript
+        working-directory: services/${{ matrix.service }}
+        run: npm run build
+      
+      - name: Run tests
+        working-directory: services/${{ matrix.service }}
+        run: npm test
+        env:
+          CI: true
+  
+  # Validate Python service
+  python-service:
+    name: Python Service (AI Review)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        working-directory: services/ai-review-service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Validate imports
+        working-directory: services/ai-review-service
+        run: |
+          python -m py_compile app/main.py app/llm.py app/schemas.py app/metrics.py app/s3_utils.py
+      
+      - name: Check code style (optional)
+        working-directory: services/ai-review-service
+        run: |
+          pip install flake8 || true
+          # Only run if flake8 is available, don't fail if not
+          python -m flake8 app/ --max-line-length=120 --ignore=E501,W503 || echo "Flake8 not critical, continuing..."
+        continue-on-error: true
+  
+  # Type checking for all TypeScript services (separate job for visibility)
+  typecheck:
+    name: TypeScript Type Check
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        service:
+          - orchestrator-service
+          - webhook-service
+          - static-analysis-worker
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm install
+      
+      - name: Type check
+        working-directory: services/${{ matrix.service }}
+        run: npx tsc --noEmit
+

@@ -3,6 +3,7 @@ import db from './db';
 import { callAIService } from './ai-service';
 import { postGitHubComment } from './github-service';
 import config from './config';
+import { reviewsTotal } from './metrics';
 
 const KAFKA_BROKER = config.kafkaBroker;
 const KAFKA_GROUP_ID = config.kafkaGroupId;
@@ -120,6 +121,9 @@ async function processMessage(message: CodeReviewMessage): Promise<void> {
         completed_at: db.fn.now()
       });
 
+    // Increment reviews_total metric
+    reviewsTotal.inc({ status: 'done' });
+
     console.log(`Marked review ${review_id} as done with completed_at timestamp`);
   } catch (error: any) {
     console.error(`Error processing message for job ${job_id}:`, error.message);
@@ -129,6 +133,9 @@ async function processMessage(message: CodeReviewMessage): Promise<void> {
       await db('reviews')
         .where({ job_id })
         .update({ status: 'failed' });
+      
+      // Increment reviews_total metric for failed reviews
+      reviewsTotal.inc({ status: 'failed' });
     } catch (dbError) {
       console.error('Failed to update review status to failed:', dbError);
     }
