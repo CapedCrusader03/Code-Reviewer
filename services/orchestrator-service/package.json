@@ -18,7 +18,8 @@
     "express": "^4.18.2",
     "kafkajs": "^2.2.4",
     "knex": "^3.0.1",
-    "mysql2": "^3.6.5"
+    "mysql2": "^3.6.5",
+    "prom-client": "^15.1.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

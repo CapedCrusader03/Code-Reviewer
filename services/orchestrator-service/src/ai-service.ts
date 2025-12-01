@@ -1,5 +1,6 @@
 import axios from 'axios';
 import config from './config';
+import { aiLatencyMs } from './metrics';
 
 const AI_SERVICE_URL = config.aiServiceUrl;
 
@@ -36,6 +37,9 @@ export async function callAIService(diff: string, static_metrics?: any): Promise
   // Use the AI service URL (defaults to http://localhost:8001)
   console.log(`Calling AI service at ${AI_SERVICE_URL}/review`);
 
+  // Start timing for metrics
+  const startTime = Date.now();
+
   try {
     const response = await axios.post<AIReviewResponse>(
       `${AI_SERVICE_URL}/review`,
@@ -46,8 +50,16 @@ export async function callAIService(diff: string, static_metrics?: any): Promise
       }
     );
 
+    // Record latency in milliseconds
+    const latency = Date.now() - startTime;
+    aiLatencyMs.observe(latency);
+
     return response.data;
   } catch (error: any) {
+    // Record latency even on error
+    const latency = Date.now() - startTime;
+    aiLatencyMs.observe(latency);
+
     console.error('Error calling AI service:', error.message);
     // Fallback to mock on error
     console.log('Falling back to mock AI response');

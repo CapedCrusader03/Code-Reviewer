@@ -4,6 +4,7 @@ import { testConnection } from './db';
 import reviewsRouter from './routes/reviews';
 import { startKafkaConsumer, startStaticAnalysisConsumer } from './kafka-consumer';
 import config from './config';
+import { register } from './metrics';
 
 const app = express();
 const PORT = config.port;
@@ -20,6 +21,17 @@ app.use(express.json());
 
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// Prometheus metrics endpoint
+app.get('/metrics', async (req: Request, res: Response) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    const metrics = await register.metrics();
+    res.end(metrics);
+  } catch (error: any) {
+    res.status(500).end(error.message);
+  }
 });
 
 // Routes

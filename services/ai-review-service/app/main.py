@@ -1,9 +1,12 @@
 import logging
 import uuid
-from fastapi import FastAPI
+import time
+from fastapi import FastAPI, Response
+from fastapi.responses import PlainTextResponse
 from app.schemas import ReviewRequest, ReviewResponse, Finding
 from app.llm import llm_run
 from app.s3_utils import upload_plantuml
+from app.metrics import reviews_total, ai_latency_ms, get_metrics
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,6 +17,12 @@ app = FastAPI(title="AI Code Review Service", version="1.0.0")
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return PlainTextResponse(content=get_metrics(), media_type="text/plain")
 
 
 @app.post("/review", response_model=ReviewResponse)
@@ -35,7 +44,27 @@ Return the response in JSON format."""
     
     # Call LLM (stub for now)
     logger.info("Calling llm_run with prompt")
-    llm_result = llm_run(prompt)
+    
+    # Start timing for metrics
+    start_time = time.time()
+    
+    try:
+        llm_result = llm_run(prompt)
+        
+        # Record latency in milliseconds
+        latency_ms = (time.time() - start_time) * 1000
+        ai_latency_ms.observe(latency_ms)
+        
+        # Increment success counter
+        reviews_total.labels(status='success').inc()
+    except Exception as e:
+        # Record latency even on error
+        latency_ms = (time.time() - start_time) * 1000
+        ai_latency_ms.observe(latency_ms)
+        
+        # Increment error counter
+        reviews_total.labels(status='error').inc()
+        raise
     
     # Get PlantUML text
     plantuml_text = llm_result.get("plantuml", "@startuml\n@enduml")
