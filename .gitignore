@@ -64,3 +64,5 @@ restart-*.ps1
 
 *.txt
 *.keep
+
+!runbook.md
