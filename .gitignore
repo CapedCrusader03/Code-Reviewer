@@ -71,7 +71,7 @@ docs/*.md
 !requirements.txt
 *.keep
 
-# AWS credentials and keys (NEVER COMMIT)
+# AWS credentials and keys
 *.pem
 *.csv
 *credentials*
