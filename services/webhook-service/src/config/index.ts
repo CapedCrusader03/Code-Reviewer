@@ -47,25 +47,64 @@ function getEnvVarAsBoolean(name: string, defaultValue: boolean): boolean {
   return value.toLowerCase() === 'true';
 }
 
+export async function loadConfigAsync(): Promise<WebhookConfig> {
+  const useAwsSecrets = getEnvVarAsBoolean('USE_AWS_SECRETS', false);
+  const useParameterStore = getEnvVarAsBoolean('USE_PARAMETER_STORE', true); // Default to Parameter Store
+  const secretsConfig = {
+    useAwsSecrets,
+    awsRegion: process.env.AWS_REGION,
+    secretName: process.env.SECRET_NAME,
+    useParameterStore
+  };
+
+  let webhookSecret = '';
+  let githubToken = '';
+
+  if (useAwsSecrets) {
+    try {
+      const { getSecret } = await import('./secrets');
+      webhookSecret = (await getSecret('GITHUB_WEBHOOK_SECRET', secretsConfig)) || getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret');
+      githubToken = (await getSecret('GITHUB_TOKEN', secretsConfig)) || getEnvVar('GITHUB_TOKEN', '');
+    } catch (error: any) {
+      console.warn('⚠️  Failed to load secrets from AWS, falling back to environment variables:', error.message);
+      webhookSecret = getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret');
+      githubToken = getEnvVar('GITHUB_TOKEN', '');
+    }
+  } else {
+    webhookSecret = getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret');
+    githubToken = getEnvVar('GITHUB_TOKEN', '');
+  }
+
+  return {
+    port: getEnvVarAsNumber('PORT', 4000),
+    webhookSecret,
+    githubToken,
+    kafkaBroker: getEnvVar('KAFKA_BROKER', 'localhost:9092'),
+    secrets: secretsConfig
+  };
+}
+
+// Synchronous version for backward compatibility
 export function loadConfig(): WebhookConfig {
   const useAwsSecrets = getEnvVarAsBoolean('USE_AWS_SECRETS', false);
   
-  // For MVP, we use env vars only (AWS Secrets Manager is stubbed)
-  // In production, this would call getSecret() when useAwsSecrets=true
+  // For synchronous loading, we can't use async Parameter Store
+  // So we'll use environment variables and warn if AWS secrets are requested
   if (useAwsSecrets) {
-    console.warn('⚠️  USE_AWS_SECRETS=true is set, but AWS Secrets Manager is not fully implemented for MVP');
-    console.warn('   Falling back to environment variables. Set USE_AWS_SECRETS=false to suppress this warning.');
+    console.warn('⚠️  USE_AWS_SECRETS=true requires async config loading');
+    console.warn('   Use loadConfigAsync() for Parameter Store support, or set USE_AWS_SECRETS=false');
   }
 
   return {
     port: getEnvVarAsNumber('PORT', 4000),
     webhookSecret: getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret'),
-    githubToken: getEnvVar('GITHUB_TOKEN', ''), // Optional, but warn if not set
-    kafkaBroker: getEnvVar('KAFKA_BROKER', 'localhost:9092'), // Has default for local dev
+    githubToken: getEnvVar('GITHUB_TOKEN', ''),
+    kafkaBroker: getEnvVar('KAFKA_BROKER', 'localhost:9092'),
     secrets: {
       useAwsSecrets,
       awsRegion: process.env.AWS_REGION,
-      secretName: process.env.SECRET_NAME
+      secretName: process.env.SECRET_NAME,
+      useParameterStore: getEnvVarAsBoolean('USE_PARAMETER_STORE', true)
     }
   };
 }

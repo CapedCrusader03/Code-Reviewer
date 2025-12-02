@@ -63,10 +63,12 @@ function getEnvVarAsBoolean(name: string, defaultValue: boolean): boolean {
 
 async function loadConfigAsync(): Promise<OrchestratorConfig> {
   const useAwsSecrets = getEnvVarAsBoolean('USE_AWS_SECRETS', false);
+  const useParameterStore = getEnvVarAsBoolean('USE_PARAMETER_STORE', true); // Default to Parameter Store
   const secretsConfig = {
     useAwsSecrets,
     awsRegion: process.env.AWS_REGION,
-    secretName: process.env.SECRET_NAME
+    secretName: process.env.SECRET_NAME,
+    useParameterStore
   };
 
   // Load secrets (from AWS or env vars)

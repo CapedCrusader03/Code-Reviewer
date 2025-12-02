@@ -60,9 +60,21 @@ __pycache__/
 *.ps1
 restart-*.ps1
 
+# Markdown files (except important docs)
 *.md
+docs/*.md
+!README.md
+!runbook.md
 
+# Text files (except important ones)
 *.txt
+!requirements.txt
 *.keep
 
-!runbook.md
+# AWS credentials and keys (NEVER COMMIT)
+*.pem
+*.csv
+*credentials*
+*accessKeys*
+aws-cli-*
+code-reviewer-key.pem
