@@ -27,6 +27,7 @@ export interface OrchestratorConfig {
     useAwsSecrets: boolean;
     awsRegion?: string;
     secretName?: string;
+    useParameterStore?: boolean;
   };
 }
 

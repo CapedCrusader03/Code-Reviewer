@@ -13,6 +13,7 @@ interface WebhookConfig {
     useAwsSecrets: boolean;
     awsRegion?: string;
     secretName?: string;
+    useParameterStore?: boolean;
   };
 }
 
