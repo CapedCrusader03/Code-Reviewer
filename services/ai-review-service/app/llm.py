@@ -3,12 +3,20 @@ import logging
 import os
 from typing import Dict, Any, Optional
 from app.schemas import ReviewResponse, Finding
+from app.parameter_store import get_llm_api_key, get_parameter_from_store
 
 logger = logging.getLogger(__name__)
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "").lower()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+USE_PARAMETER_STORE = os.getenv("USE_PARAMETER_STORE", "true").lower() == "true"
+
+# Get API keys from Parameter Store or environment variables
+if USE_PARAMETER_STORE:
+    OPENAI_API_KEY = get_parameter_from_store("/code-reviewer/openai-api-key") or os.getenv("OPENAI_API_KEY", "")
+    GEMINI_API_KEY = get_parameter_from_store("/code-reviewer/gemini-api-key") or os.getenv("GEMINI_API_KEY", "")
+else:
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 
 def _get_stub_result() -> Dict[str, Any]:
