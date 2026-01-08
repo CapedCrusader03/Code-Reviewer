@@ -9,19 +9,19 @@ An intelligent, automated code review platform that integrates with GitHub to pr
 
 ## Table of Contents
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Tech Stack](#-tech-stack)
-- [Prerequisites](#-prerequisites)
-- [Quick Start](#-quick-start)
-- [Development Setup](#-development-setup)
-- [API Documentation](#-api-documentation)
-- [Configuration](#-configuration)
-- [Deployment](#-deployment)
-- [Testing](#-testing)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Development Setup](#development-setup)
+- [API Documentation](#api-documentation)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Overview
 
