@@ -64,29 +64,31 @@ The system processes 10,000+ PR reviews monthly, reducing manual review time by 
                                                         │
                                                         ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Orchestrator    │◀──▶│  AI Service     │    │ Static Worker   │
-│ Service         │    │ (LLM Analysis)  │    │ (Code Linting)  │
+│ Orchestrator    │───▶│  AI Service     │    │ Static Worker   │
+│ Service         │◀───│ (LLM Analysis)  │◀───│ (Code Linting)  │
 │ (Coordinates    │    │                 │    │                 │
 │  workflow)      │    │ • Quality Score │    │ • ESLint        │
 │                 │    │ • PlantUML      │    │ • Complexity     │
 └─────────────────┘    │ • Findings      │    │ • Metrics       │
      │                 └─────────────────┘    └─────────────────┘
-     │                           │                     │
-     └───────────────────────────┼─────────────────────┘
-                                 ▼
+     ▼                           │                     │
+┌─────────────────┐              │                     │
+│   GitHub API    │◀─────────────┼─────────────────────┘
+│ (PR Comments)   │              │
+└─────────────────┘              ▼
                     ┌─────────────────┐    ┌─────────────────┐
                     │   MySQL (RDS)   │    │   S3 Bucket     │
                     │ • Reviews       │    │ • PlantUML      │
                     │ • Findings      │    │ • Diagrams      │
                     └─────────────────┘    └─────────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────┐    ┌─────────────────┐
-                    │   Dashboard     │    │   GitHub API    │
-                    │ (React/Next.js) │    │ (PR Comments)   │
-                    │ • Review List   │    │                 │
-                    │ • Details View  │    │                 │
-                    │ • Quality Trends│    └─────────────────┘
+                                 ▲                     ▲
+                                 │                     │
+                    ┌─────────────────┐               │
+                    │   Dashboard     │◀──────────────┘
+                    │ (React/Next.js) │
+                    │ • Review List   │
+                    │ • Details View  │
+                    │ • Quality Trends│
                     └─────────────────┘
 ```
 
