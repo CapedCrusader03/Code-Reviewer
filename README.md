@@ -27,9 +27,9 @@ An intelligent, automated code review platform that integrates with GitHub to pr
 
 AI Code Reviewer is a production-ready microservices platform that automatically analyzes GitHub pull requests using a combination of:
 
-- **AI-powered code analysis** via Large Language Models (OpenAI/Claude)
+- **AI-powered code analysis** via Large Language Models (Gemini/OpenAI/Claude)
 - **Static code analysis** with industry-standard linters
-- **Automated visual documentation** using PlantUML diagrams
+<!-- - **Automated visual documentation** using PlantUML diagrams -->
 - **Intelligent feedback** posted directly to GitHub PRs
 
 The system processes 10,000+ PR reviews monthly, reducing manual review time by 60% while maintaining consistent code quality standards across development teams.
@@ -49,8 +49,8 @@ The system processes 10,000+ PR reviews monthly, reducing manual review time by 
 - **Microservices Architecture**: 5 independent services for scalability
 - **Event-Driven**: Kafka-based asynchronous processing
 - **Secure Integration**: HMAC signature validation for GitHub webhooks
-- **Cloud-Native**: AWS deployment with ECS, RDS, S3, MSK
-- **Monitoring**: Prometheus/Grafana metrics and CloudWatch logging
+<!-- - **Cloud-Native**: AWS deployment with ECS, RDS, S3, MSK -->
+<!-- - **Monitoring**: Prometheus/Grafana metrics and CloudWatch logging -->
 - **Multi-Language Support**: Extensible architecture for new languages
 
 ## Architecture
@@ -108,17 +108,17 @@ The system processes 10,000+ PR reviews monthly, reducing manual review time by 
 - **Runtime**: Node.js 18+, Python 3.8+
 - **Frameworks**: Express.js, FastAPI
 - **Language**: TypeScript 5.3+, Python
-- **Database**: MySQL 8.0 (AWS RDS)
-- **Message Queue**: Apache Kafka (AWS MSK)
+- **Database**: MySQL 8.0
+- **Message Queue**: Apache Kafka
 - **ORM**: Knex.js
 
 ### Infrastructure & DevOps
 - **Containerization**: Docker & Docker Compose
 - **Cloud Platform**: Amazon Web Services
 - **IaC**: Terraform (planned)
-- **CI/CD**: GitHub Actions (planned)
-- **Monitoring**: Prometheus, Grafana, CloudWatch
-- **Secrets Management**: AWS Secrets Manager
+- **CI/CD**: GitHub Actions 
+- **Monitoring**: Prometheus, Grafana, CloudWatch (planned)
+- **Secrets Management**: AWS Secrets Manager (planned)
 
 ### Frontend
 - **Framework**: Next.js 13+
@@ -127,7 +127,7 @@ The system processes 10,000+ PR reviews monthly, reducing manual review time by 
 
 ### External Integrations
 - **GitHub API**: Webhooks, PR management, comments
-- **LLM Providers**: OpenAI API, Claude API
+- **LLM Providers**: Gemini API. Can be extended by any other LLM API.
 - **Diagram Generation**: PlantUML
 - **Object Storage**: AWS S3
 
@@ -224,7 +224,7 @@ DB_HOST=localhost
 DB_PORT=3308
 DB_NAME=code_reviewer
 DB_USER=reviewer
-DB_PASSWORD=reviewerpass
+DB_PASSWORD=yourpassword
 
 # Kafka
 KAFKA_BROKERS=localhost:9092
@@ -316,7 +316,7 @@ npm run build:all
 docker-compose up -d
 ```
 
-### AWS Production Deployment
+### AWS Production Deployment (Planned)
 
 1. **Prerequisites**
    - AWS account with appropriate permissions
@@ -425,12 +425,6 @@ We welcome contributions! Please follow these steps:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
-
-- **OpenAI** for providing powerful LLM capabilities
-- **GitHub** for excellent API and webhook infrastructure
-- **Apache Kafka** for reliable event streaming
-- **PlantUML** for automated diagram generation
 
 ## Support
 
