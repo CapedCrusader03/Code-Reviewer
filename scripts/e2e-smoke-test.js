@@ -24,6 +24,12 @@ const results = {
   errors: []
 };
 
+function summarizeDiff(diff) {
+  if (!diff) return 'No diff content provided';
+  const lines = diff.split('\n').length;
+  return `Diff length: ${diff.length} chars across ${lines} lines`;
+}
+
 function log(step, success, message) {
   const status = success ? '✓' : '✗';
   const line = `${status} ${step}: ${message}`;
@@ -206,6 +212,8 @@ index 1234567..abcdefg 100644
  }
 `
     };
+
+    console.log('Smoke test diff summary:', summarizeDiff(webhookPayload.diff));
 
     const webhookResponse = await sendWebhook(webhookPayload);
     
