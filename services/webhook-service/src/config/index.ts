@@ -19,7 +19,7 @@ interface WebhookConfig {
 
 function getEnvVar(name: string, defaultValue?: string): string {
   const value = process.env[name];
-  if (!value && !defaultValue) {
+  if (!value && defaultValue === undefined) {
     console.error(`❌ Required environment variable ${name} is not set`);
     console.error(`   Please set ${name} before starting the service`);
     process.exit(1);
