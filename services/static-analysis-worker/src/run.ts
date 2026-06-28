@@ -1,51 +1,39 @@
 #!/usr/bin/env node
 
 /**
- * Static Analysis Worker
- * Runs linters and generates metrics for code review
+ * Static Analysis Worker - Daemon Entrypoint
+ *
+ * Starts the Kafka consumer that listens for static-analysis-requests,
+ * runs linting and dependency context extraction, and publishes results
+ * back to the static-analysis-results topic.
  */
 
-function showUsage() {
-  console.log(`
-Static Analysis Worker
+import { startWorker, stopWorker } from './kafka-consumer';
 
-Usage:
-  node run.js [options]
+async function main() {
+  console.log('[static-worker] Starting Static Analysis Worker daemon...');
 
-Options:
-  --help, -h          Show this help message
-  --version, -v       Show version number
-
-Examples:
-  node run.js --help
-`);
-}
-
-function showVersion() {
-  console.log('1.0.0');
-}
-
-function main() {
-  const args = process.argv.slice(2);
-
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    showUsage();
+  // Graceful shutdown on process signals
+  process.on('SIGTERM', async () => {
+    console.log('[static-worker] SIGTERM received, shutting down gracefully...');
+    await stopWorker();
     process.exit(0);
-  }
+  });
 
-  if (args.includes('--version') || args.includes('-v')) {
-    showVersion();
+  process.on('SIGINT', async () => {
+    console.log('[static-worker] SIGINT received, shutting down gracefully...');
+    await stopWorker();
     process.exit(0);
+  });
+
+  try {
+    await startWorker();
+  } catch (error: any) {
+    console.error('[static-worker] Fatal error, exiting:', error.message);
+    process.exit(1);
   }
-
-  console.log('Static Analysis Worker - Ready for implementation');
-  process.exit(0);
 }
 
-if (require.main === module) {
-  main();
-}
+main();
 
 export {};
-
-

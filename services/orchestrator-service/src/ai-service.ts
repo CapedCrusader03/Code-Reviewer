@@ -4,11 +4,6 @@ import { aiLatencyMs } from './metrics';
 
 const AI_SERVICE_URL = config.aiServiceUrl;
 
-interface AIReviewRequest {
-  diff: string;
-  static_metrics?: any;
-}
-
 interface Finding {
   type: 'code_smell' | 'security_issue' | 'suggestion' | 'best_practice';
   severity: 'low' | 'medium' | 'high' | 'critical';
@@ -18,6 +13,12 @@ interface Finding {
   suggestion?: string;
 }
 
+interface AIReviewRequest {
+  diff: string;
+  static_metrics?: any;
+  code_context?: Record<string, string>;
+}
+
 interface AIReviewResponse {
   quality_score: number;
   findings: Finding[];
@@ -25,77 +26,76 @@ interface AIReviewResponse {
   uml_s3_url: string | null;
 }
 
-export async function callAIService(diff: string, static_metrics?: any): Promise<AIReviewResponse> {
-  // Check if mock mode is explicitly enabled
+export async function callAIService(
+  diff: string,
+  static_metrics?: any,
+  code_context?: Record<string, string>
+): Promise<AIReviewResponse> {
   const useMock = config.useMockAI;
-  
-  if (useMock) {
-    console.log('Using mock AI service response (USE_MOCK_AI=true)');
-    return getMockAIResponse(diff);
-  }
-  
-  // Use the AI service URL (defaults to http://localhost:8001)
-  console.log(`Calling AI service at ${AI_SERVICE_URL}/review`);
 
-  // Start timing for metrics
+  if (useMock) {
+    console.log('[ai-service] Using mock AI response (USE_MOCK_AI=true)');
+    return getMockAIResponse();
+  }
+
+  console.log(`[ai-service] Calling AI service at ${AI_SERVICE_URL}/review`);
   const startTime = Date.now();
 
   try {
+    const requestBody: AIReviewRequest = { diff, static_metrics, code_context };
+
     const response = await axios.post<AIReviewResponse>(
       `${AI_SERVICE_URL}/review`,
-      { diff, static_metrics },
+      requestBody,
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 30000 // 30 second timeout
+        timeout: 60000, // 60s - multi-agent calls take longer than a single prompt
       }
     );
 
-    // Record latency in milliseconds
     const latency = Date.now() - startTime;
     aiLatencyMs.observe(latency);
+    console.log(`[ai-service] Response received in ${latency}ms`);
 
     return response.data;
   } catch (error: any) {
-    // Record latency even on error
     const latency = Date.now() - startTime;
     aiLatencyMs.observe(latency);
 
-    console.error('Error calling AI service:', error.message);
-    // Fallback to mock on error
-    console.log('Falling back to mock AI response');
-    return getMockAIResponse(diff);
+    console.error('[ai-service] Error calling AI service:', error.message);
+    console.log('[ai-service] Falling back to mock AI response');
+    return getMockAIResponse();
   }
 }
 
-function getMockAIResponse(diff: string): AIReviewResponse {
+function getMockAIResponse(): AIReviewResponse {
   return {
-    quality_score: 85,
+    quality_score: 82,
     findings: [
+      {
+        type: 'security_issue',
+        severity: 'high',
+        file_path: 'src/index.ts',
+        line_number: 12,
+        message: 'Potential SQL injection: user input is not sanitized before being interpolated.',
+        suggestion: 'Use parameterized queries or an ORM instead of string interpolation.',
+      },
       {
         type: 'code_smell',
         severity: 'medium',
-        file_path: 'README.md',
-        line_number: 5,
-        message: 'Consider adding more detailed documentation',
-        suggestion: 'Add examples and usage instructions to improve clarity'
+        file_path: 'src/utils.ts',
+        line_number: 34,
+        message: 'Function has cyclomatic complexity of 14, exceeding the recommended limit of 10.',
+        suggestion: 'Extract the nested conditional logic into smaller, named helper functions.',
       },
       {
         type: 'best_practice',
         severity: 'low',
-        message: 'Good use of clear commit messages',
-        suggestion: 'Continue following conventional commit format'
+        message: 'Good use of async/await and structured error handling.',
+        suggestion: 'Continue following this pattern across all service layers.',
       },
-      {
-        type: 'suggestion',
-        severity: 'low',
-        file_path: 'README.md',
-        line_number: 1,
-        message: 'Consider adding a table of contents for better navigation',
-        suggestion: 'Add ToC links for sections'
-      }
     ],
     plantuml: '@startuml\nclass CodeReview {\n  +quality_score: int\n  +findings: List\n}\n@enduml',
-    uml_s3_url: null
+    uml_s3_url: null,
   };
 }
-

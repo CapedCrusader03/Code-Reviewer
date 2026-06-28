@@ -1,7 +1,7 @@
-import { Kafka, Consumer, EachMessagePayload } from 'kafkajs';
+import { Kafka, Consumer, Producer, EachMessagePayload } from 'kafkajs';
 import db from './db';
 import { callAIService } from './ai-service';
-import { postGitHubComment } from './github-service';
+import { postGitHubReview } from './github-service';
 import config from './config';
 import { reviewsTotal } from './metrics';
 
@@ -10,11 +10,17 @@ const KAFKA_GROUP_ID = config.kafkaGroupId;
 
 const kafka = new Kafka({
   clientId: 'orchestrator-service',
-  brokers: [KAFKA_BROKER]
+  brokers: [KAFKA_BROKER],
 });
 
-const consumer: Consumer = kafka.consumer({ groupId: KAFKA_GROUP_ID });
-const staticAnalysisConsumer: Consumer = kafka.consumer({ groupId: `${KAFKA_GROUP_ID}-static-analysis` });
+// Consumer for incoming webhook events
+const webhookConsumer: Consumer = kafka.consumer({ groupId: KAFKA_GROUP_ID });
+
+// Consumer for receiving static analysis results from the worker
+const resultsConsumer: Consumer = kafka.consumer({ groupId: `${KAFKA_GROUP_ID}-static-results` });
+
+// Producer for dispatching work to the static analysis worker
+const producer: Producer = kafka.producer();
 
 interface CodeReviewMessage {
   job_id: string;
@@ -24,233 +30,183 @@ interface CodeReviewMessage {
   diff: string;
 }
 
-async function processMessage(message: CodeReviewMessage): Promise<void> {
-  const { job_id, repo, pr_number, commit_sha, diff } = message;
+interface StaticAnalysisResult {
+  job_id: string;
+  static_metrics: any;
+  code_context: Record<string, string>;
+  error?: string;
+}
 
-  console.log(`Processing job: ${job_id} for ${repo}#${pr_number}`);
+// ─── Consumer 1: Webhook Events ───────────────────────────────────────────────
+// Registers a pending review in the database and dispatches the static analysis job.
+
+async function handleWebhookMessage({ message }: EachMessagePayload): Promise<void> {
+  const raw = message.value?.toString();
+  if (!raw) return;
+
+  let data: CodeReviewMessage;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    console.error('[orchestrator] Failed to parse webhook message:', err);
+    return;
+  }
+
+  const { job_id, repo, pr_number, commit_sha, diff } = data;
+  console.log(`[orchestrator] Received PR review request: job=${job_id}, ${repo}#${pr_number}`);
 
   try {
-    // Create review record with status='running'
-    const [review_id] = await db('reviews').insert({
+    // 1. Write initial pending record to the database
+    await db('reviews').insert({
       job_id,
       repo,
       pr_number,
       commit_sha,
-      status: 'running',
-      created_at: db.fn.now()
+      status: 'pending',
+      // Temporarily store the raw diff in static_metrics JSON for retrieval later
+      static_metrics: JSON.stringify({ _diff: diff }),
+      created_at: db.fn.now(),
     });
 
-    console.log(`Created review ${review_id} with status=running for job ${job_id}`);
+    console.log(`[orchestrator] Created review record for job ${job_id}`);
 
-    // Call AI service for review
-    console.log(`Calling AI service for review ${review_id}`);
-    const aiResponse = await callAIService(diff);
+    // 2. Dispatch work to the static analysis worker
+    await producer.send({
+      topic: 'static-analysis-requests',
+      messages: [{
+        key: job_id,
+        value: JSON.stringify({ job_id, repo, pr_number, commit_sha }),
+      }],
+    });
 
-    // Persist findings
+    console.log(`[orchestrator] Dispatched job ${job_id} to static-analysis-requests`);
+  } catch (error: any) {
+    console.error(`[orchestrator] Failed to handle webhook message for job ${job_id}:`, error.message);
+  }
+}
+
+// ─── Consumer 2: Static Analysis Results ──────────────────────────────────────
+// Receives linter metrics + code context, calls the AI service, posts inline
+// GitHub comments, and marks the review as done.
+
+async function handleStaticAnalysisResult({ message }: EachMessagePayload): Promise<void> {
+  const raw = message.value?.toString();
+  if (!raw) return;
+
+  let data: StaticAnalysisResult;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    console.error('[orchestrator] Failed to parse static analysis result:', err);
+    return;
+  }
+
+  const { job_id, static_metrics, code_context, error: workerError } = data;
+  console.log(`[orchestrator] Received static analysis results for job ${job_id}`);
+
+  try {
+    // Retrieve the review record and the cached diff text
+    const review = await db('reviews').where({ job_id }).first();
+    if (!review) {
+      console.error(`[orchestrator] No review record found for job ${job_id}`);
+      return;
+    }
+
+    // If the static worker reported an error, mark the review as failed
+    if (workerError) {
+      console.error(`[orchestrator] Static worker reported an error for job ${job_id}: ${workerError}`);
+      await db('reviews').where({ job_id }).update({ status: 'failed' });
+      reviewsTotal.inc({ status: 'failed' });
+      return;
+    }
+
+    // Recover the diff that was cached when the webhook arrived
+    const cachedMetrics = JSON.parse(review.static_metrics || '{}');
+    const diff: string = cachedMetrics._diff || '';
+
+    // Mark review as running
+    await db('reviews').where({ job_id }).update({ status: 'running' });
+
+    // 3. Call the AI Service with diff, linter metrics, and codebase context
+    console.log(`[orchestrator] Calling AI service for job ${job_id}...`);
+    const aiResponse = await callAIService(diff, static_metrics, code_context);
+
+    // 4. Persist findings to the database
     if (aiResponse.findings && aiResponse.findings.length > 0) {
-      // Valid enum values for type and severity
       const validTypes = ['code_smell', 'security_issue', 'suggestion', 'best_practice'];
       const validSeverities = ['low', 'medium', 'high', 'critical'];
-      
-      // Normalize finding types and severities to match database enum
-      const normalizeType = (type: string): string => {
-        const lowerType = type.toLowerCase();
-        // Map common variations to valid types
-        if (lowerType.includes('error') || lowerType.includes('issue') || lowerType.includes('bug')) {
-          return 'code_smell';
-        }
-        if (lowerType.includes('security') || lowerType.includes('vulnerability')) {
-          return 'security_issue';
-        }
-        if (lowerType.includes('best') || lowerType.includes('practice') || lowerType.includes('pattern')) {
-          return 'best_practice';
-        }
-        // Default to suggestion if not recognized
-        return validTypes.includes(lowerType) ? lowerType : 'suggestion';
-      };
-      
-      const normalizeSeverity = (severity: string): string => {
-        const lowerSeverity = severity.toLowerCase();
-        return validSeverities.includes(lowerSeverity) ? lowerSeverity : 'low';
-      };
-      
-      const findingsToInsert = aiResponse.findings.map(finding => ({
-        review_id,
-        type: normalizeType(finding.type),
-        severity: normalizeSeverity(finding.severity),
-        file_path: finding.file_path || null,
-        line_number: finding.line_number || null,
-        message: finding.message,
-        suggestion: finding.suggestion || null,
-        created_at: db.fn.now()
+
+      const normalizeType = (t: string) => validTypes.includes(t.toLowerCase()) ? t.toLowerCase() : 'suggestion';
+      const normalizeSeverity = (s: string) => validSeverities.includes(s.toLowerCase()) ? s.toLowerCase() : 'low';
+
+      const findingsToInsert = aiResponse.findings.map((f: any) => ({
+        review_id: review.id,
+        type: normalizeType(f.type),
+        severity: normalizeSeverity(f.severity),
+        file_path: f.file_path || null,
+        line_number: f.line_number || null,
+        message: f.message,
+        suggestion: f.suggestion || null,
+        created_at: db.fn.now(),
       }));
 
       await db('findings').insert(findingsToInsert);
-      console.log(`Inserted ${findingsToInsert.length} findings for review ${review_id}`);
+      console.log(`[orchestrator] Inserted ${findingsToInsert.length} findings for job ${job_id}`);
     }
 
-    // Update review with quality score
-    await db('reviews')
-      .where({ id: review_id })
-      .update({
-        quality_score: aiResponse.quality_score
-      });
-
-    console.log(`Completed review ${review_id} with quality score ${aiResponse.quality_score}`);
-
-    // Post comment to GitHub with top 3 suggestions
-    const commentId = await postGitHubComment({
-      review_id,
-      repo,
-      pr_number,
-      quality_score: aiResponse.quality_score,
-      findings: aiResponse.findings
-    });
+    // 5. Post inline PR review comments to GitHub
+    const commentId = await postGitHubReview(
+      review.repo,
+      review.pr_number,
+      review.commit_sha,
+      aiResponse.findings || []
+    );
 
     if (commentId) {
-      console.log(`Posted GitHub comment ${commentId} for review ${review_id}`);
-    } else {
-      console.log(`Skipped GitHub comment for review ${review_id} (no token or error)`);
+      console.log(`[orchestrator] Posted GitHub review ${commentId} for job ${job_id}`);
     }
 
-    // Mark review as done and set completed_at timestamp
-    await db('reviews')
-      .where({ id: review_id })
-      .update({
-        status: 'done',
-        completed_at: db.fn.now()
-      });
-
-    // Increment reviews_total metric
-    reviewsTotal.inc({ status: 'done' });
-
-    console.log(`Marked review ${review_id} as done with completed_at timestamp`);
-  } catch (error: any) {
-    console.error(`Error processing message for job ${job_id}:`, error.message);
-    
-    // Try to mark the review as failed in DB if it was created
-    try {
-      await db('reviews')
-        .where({ job_id })
-        .update({ status: 'failed' });
-      
-      // Increment reviews_total metric for failed reviews
-      reviewsTotal.inc({ status: 'failed' });
-    } catch (dbError) {
-      console.error('Failed to update review status to failed:', dbError);
-    }
-    
-    throw error;
-  }
-}
-
-async function handleMessage({ topic, partition, message }: EachMessagePayload): Promise<void> {
-  const value = message.value?.toString();
-  
-  if (!value) {
-    console.error('Received empty message');
-    return;
-  }
-
-  try {
-    const reviewRequest: CodeReviewMessage = JSON.parse(value);
-    await processMessage(reviewRequest);
-  } catch (error: any) {
-    console.error('Error handling Kafka message:', error.message);
-  }
-}
-
-export async function startKafkaConsumer(): Promise<void> {
-  try {
-    await consumer.connect();
-    console.log('Kafka consumer connected');
-
-    await consumer.subscribe({ topic: 'code-review-requests', fromBeginning: false });
-    console.log('Subscribed to topic: code-review-requests');
-
-    await consumer.run({
-      eachMessage: handleMessage
+    // 6. Mark review as done
+    await db('reviews').where({ id: review.id }).update({
+      quality_score: aiResponse.quality_score,
+      github_comment_id: commentId,
+      static_metrics: JSON.stringify(static_metrics),
+      status: 'done',
+      completed_at: db.fn.now(),
     });
 
-    console.log('Kafka consumer started');
-  } catch (error) {
-    console.error('Failed to start Kafka consumer:', error);
-    throw error;
-  }
-}
+    reviewsTotal.inc({ status: 'done' });
+    console.log(`[orchestrator] Job ${job_id} completed with quality score ${aiResponse.quality_score}`);
 
-export async function stopKafkaConsumer(): Promise<void> {
-  await consumer.disconnect();
-  await staticAnalysisConsumer.disconnect();
-  console.log('Kafka consumers disconnected');
-}
-
-interface StaticAnalysisMessage {
-  job_id: string;
-  static_metrics: any;
-}
-
-async function processStaticAnalysisMessage(message: StaticAnalysisMessage): Promise<void> {
-  const { job_id, static_metrics } = message;
-
-  console.log(`Processing static analysis results for job: ${job_id}`);
-
-  try {
-    // Update reviews table with static_metrics for the corresponding job_id
-    const updated = await db('reviews')
-      .where({ job_id })
-      .update({
-        static_metrics: JSON.stringify(static_metrics)
-      });
-
-    if (updated === 0) {
-      console.warn(`No review found with job_id: ${job_id}`);
-    } else {
-      console.log(`Updated static_metrics for job ${job_id}`);
-    }
   } catch (error: any) {
-    console.error(`Error processing static analysis results for job ${job_id}:`, error.message);
-    throw error;
+    console.error(`[orchestrator] Failed to process static analysis result for job ${job_id}:`, error.message);
+    await db('reviews').where({ job_id }).update({ status: 'failed' }).catch(() => {});
+    reviewsTotal.inc({ status: 'failed' });
   }
 }
 
-async function handleStaticAnalysisMessage({ topic, partition, message }: EachMessagePayload): Promise<void> {
-  const value = message.value?.toString();
-  
-  console.log(`Received message on topic: ${topic}, partition: ${partition}, offset: ${message.offset}`);
-  
-  if (!value) {
-    console.error('Received empty static analysis message');
-    return;
-  }
+// ─── Public API ────────────────────────────────────────────────────────────────
 
-  try {
-    console.log(`Parsing static analysis message: ${value.substring(0, 100)}...`);
-    const staticAnalysisResult: StaticAnalysisMessage = JSON.parse(value);
-    console.log(`Parsed message - job_id: ${staticAnalysisResult.job_id}`);
-    await processStaticAnalysisMessage(staticAnalysisResult);
-  } catch (error: any) {
-    console.error('Error handling static analysis message:', error.message);
-    console.error('Error stack:', error.stack);
-  }
+export async function startKafkaConsumer(): Promise<void> {
+  await producer.connect();
+  console.log('[orchestrator] Kafka producer connected');
+
+  await webhookConsumer.connect();
+  await webhookConsumer.subscribe({ topic: 'code-review-requests', fromBeginning: false });
+  await webhookConsumer.run({ eachMessage: handleWebhookMessage });
+  console.log('[orchestrator] Subscribed to code-review-requests');
 }
 
 export async function startStaticAnalysisConsumer(): Promise<void> {
-  try {
-    await staticAnalysisConsumer.connect();
-    console.log('Static analysis Kafka consumer connected');
-
-    await staticAnalysisConsumer.subscribe({ topic: 'static-analysis-results', fromBeginning: true });
-    console.log('Subscribed to topic: static-analysis-results');
-
-    await staticAnalysisConsumer.run({
-      eachMessage: handleStaticAnalysisMessage
-    });
-
-    console.log('Static analysis Kafka consumer started');
-  } catch (error) {
-    console.error('Failed to start static analysis Kafka consumer:', error);
-    throw error;
-  }
+  await resultsConsumer.connect();
+  await resultsConsumer.subscribe({ topic: 'static-analysis-results', fromBeginning: false });
+  await resultsConsumer.run({ eachMessage: handleStaticAnalysisResult });
+  console.log('[orchestrator] Subscribed to static-analysis-results');
 }
 
+export async function stopKafkaConsumer(): Promise<void> {
+  await webhookConsumer.disconnect();
+  await resultsConsumer.disconnect();
+  await producer.disconnect();
+  console.log('[orchestrator] All Kafka connections disconnected');
+}
