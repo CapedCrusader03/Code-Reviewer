@@ -98,7 +98,7 @@ async function loadConfigAsync(): Promise<OrchestratorConfig> {
     }
   } else {
     // Use environment variables
-    githubToken = getEnvVar('GITHUB_TOKEN', '');
+    githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_ACCESS_TOKEN || '';
     dbPassword = getEnvVar('DB_PASSWORD', 'reviewerpass');
     dbUser = getEnvVar('DB_USER', 'reviewer');
     dbHost = getEnvVar('DB_HOST', 'localhost');
@@ -160,7 +160,7 @@ export function loadConfigSync(): OrchestratorConfig {
     kafkaGroupId: getEnvVar('KAFKA_GROUP_ID', 'orchestrator-service'),
     aiServiceUrl: getEnvVar('AI_SERVICE_URL', 'http://localhost:8001'),
     useMockAI: getEnvVarAsBoolean('USE_MOCK_AI', false),
-    githubToken: getEnvVar('GITHUB_TOKEN', ''),
+    githubToken: process.env.GITHUB_TOKEN || process.env.GITHUB_ACCESS_TOKEN || '',
     database: {
       host: getEnvVar('DB_HOST', 'localhost'),
       port: getEnvVarAsNumber('DB_PORT', 3308),

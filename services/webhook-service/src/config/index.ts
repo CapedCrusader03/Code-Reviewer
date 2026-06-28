@@ -65,15 +65,15 @@ export async function loadConfigAsync(): Promise<WebhookConfig> {
     try {
       const { getSecret } = await import('./secrets');
       webhookSecret = (await getSecret('GITHUB_WEBHOOK_SECRET', secretsConfig)) || getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret');
-      githubToken = (await getSecret('GITHUB_TOKEN', secretsConfig)) || getEnvVar('GITHUB_TOKEN', '');
+      githubToken = (await getSecret('GITHUB_TOKEN', secretsConfig)) || process.env.GITHUB_TOKEN || process.env.GITHUB_ACCESS_TOKEN || '';
     } catch (error: any) {
       console.warn('⚠️  Failed to load secrets from AWS, falling back to environment variables:', error.message);
       webhookSecret = getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret');
-      githubToken = getEnvVar('GITHUB_TOKEN', '');
+      githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_ACCESS_TOKEN || '';
     }
   } else {
     webhookSecret = getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret');
-    githubToken = getEnvVar('GITHUB_TOKEN', '');
+    githubToken = process.env.GITHUB_TOKEN || process.env.GITHUB_ACCESS_TOKEN || '';
   }
 
   return {
@@ -99,7 +99,7 @@ export function loadConfig(): WebhookConfig {
   return {
     port: getEnvVarAsNumber('PORT', 4000),
     webhookSecret: getEnvVar('GITHUB_WEBHOOK_SECRET', 'default-secret'),
-    githubToken: getEnvVar('GITHUB_TOKEN', ''),
+    githubToken: process.env.GITHUB_TOKEN || process.env.GITHUB_ACCESS_TOKEN || '',
     kafkaBroker: getEnvVar('KAFKA_BROKER', 'localhost:9092'),
     secrets: {
       useAwsSecrets,
