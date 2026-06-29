@@ -85,9 +85,9 @@ async function run() {
     const commitSha = execSync('git rev-parse HEAD').toString().trim();
     console.log(`Current Commit SHA: ${commitSha}`);
 
-    // 2. Get git diff of the buggy-util change
+    // 2. Get git diff of the entire PR branch changes compared to main
     // Using forward slashes for Windows paths compatibility in Node
-    const diff = execSync('git diff 990ab77~1 990ab77 -- services/webhook-service/src/buggy-util.ts services/webhook-service/src/server.ts').toString();
+    const diff = execSync('git diff main...HEAD').toString();
     console.log(`Generated diff of changes (${diff.length} chars)\n`);
 
     // 3. Connect to local database
