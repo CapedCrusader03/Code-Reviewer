@@ -7,7 +7,8 @@
     "apps/*"
   ],
   "scripts": {
-    "smoke-test": "node scripts/smoke-test.js",
+    "smoke-test": "bash scripts/smoke-test.sh",
+    "test:e2e": "node --env-file=.env scripts/e2e-smoke-test.js",
     "bootstrap": "echo 'Bootstrap complete'",
     "build:all": "echo 'Building all services...'",
     "dev:all": "echo 'Starting all services in dev mode...'"
