@@ -12,21 +12,13 @@ from tenacity import (
 )
 
 from app.schemas import ReviewResponse, Finding
-from app.parameter_store import get_llm_api_key, get_parameter_from_store
-
 logger = logging.getLogger(__name__)
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "").lower()
-USE_PARAMETER_STORE = os.getenv("USE_PARAMETER_STORE", "true").lower() == "true"
-
-if USE_PARAMETER_STORE:
-    GEMINI_API_KEY = get_parameter_from_store("/code-reviewer/gemini-api-key") or os.getenv("GEMINI_API_KEY", "")
-    OPENAI_API_KEY = get_parameter_from_store("/code-reviewer/openai-api-key") or os.getenv("OPENAI_API_KEY", "")
-else:
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 # ─── Custom Exceptions ─────────────────────────────────────────────────────────
@@ -123,7 +115,7 @@ async def _run_gemini_agent(system_instruction: str, user_content: str) -> Optio
     try:
         import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL)
 
         full_prompt = f"SYSTEM INSTRUCTIONS:\n{system_instruction}\n\nDATA TO ANALYZE:\n{user_content}"
         response = await asyncio.to_thread(model.generate_content, full_prompt)
@@ -155,7 +147,7 @@ async def _run_gemini_synthesizer(
         response_schema=response_schema,
     )
 
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel(GEMINI_MODEL)
     full_prompt = f"SYSTEM INSTRUCTIONS:\n{synthesizer_prompt}\n\nINPUT DATA:\n{combined_data}"
     response = await asyncio.to_thread(model.generate_content, full_prompt, generation_config=generation_config)
     return response.text
