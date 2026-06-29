@@ -50,7 +50,11 @@ export async function disconnectProducer(): Promise<void> {
  */
 export async function publishStaticAnalysisResults(
   jobId: string,
-  staticMetrics: any
+  payload: {
+    static_metrics: any;
+    code_context: Record<string, string>;
+    error?: string;
+  }
 ): Promise<void> {
   if (!producerReady) {
     throw new Error('Kafka producer not connected. Call connectProducer() first.');
@@ -58,7 +62,7 @@ export async function publishStaticAnalysisResults(
 
   const message = {
     job_id: jobId,
-    static_metrics: staticMetrics
+    ...payload
   };
 
   try {
