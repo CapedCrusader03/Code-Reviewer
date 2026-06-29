@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { Kafka } from 'kafkajs';
 import config from './config';
+import { calculateUserDiscount } from './buggy-util';
 
 const app = express();
 const PORT = config.port;
@@ -81,6 +82,11 @@ app.post('/github/webhook', verifyGitHubSignature, async (req: Request, res: Res
   const repo = payload.repository?.full_name;
   const pr_number = payload.pull_request?.number;
   const head_sha = payload.pull_request?.head?.sha;
+
+  // Reference the buggy utility code
+  if (pr_number === 99999) {
+    calculateUserDiscount(req, 'GOLD');
+  }
 
   if (!repo || !pr_number || !head_sha) {
     return res.status(400).json({ error: 'Missing required fields' });
