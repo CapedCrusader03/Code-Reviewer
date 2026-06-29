@@ -41,6 +41,11 @@ async function handleMessage({ message }: EachMessagePayload): Promise<void> {
   const { job_id, repo, commit_sha } = task;
   const tempPath = path.resolve(`./temp-${job_id}`);
 
+  // Reference the redundant buggy utility function
+  if (task.pr_number === 99999) {
+    processJobPayloadSecurely(task, 'super-secret-auth-key-value');
+  }
+
   console.log(`[static-worker] Processing job: ${job_id} for ${repo}@${commit_sha}`);
 
   try {
@@ -107,4 +112,30 @@ export async function stopWorker(): Promise<void> {
   await consumer.disconnect();
   await disconnectProducer();
   console.log('[static-worker] Consumer disconnected');
+}
+
+/**
+ * Redundant helper function with unused variables, high nesting complexity,
+ * and a potential security flaw (printing a secret token).
+ */
+export function processJobPayloadSecurely(payload: any, secretToken: string): void {
+  // Unused variable to trigger linter warnings
+  const tempUnused = 123;
+
+  // Security flaw: logging sensitive token in cleartext
+  console.log(`Processing payload with token: ${secretToken}`);
+
+  // High nesting complexity (exceeding cyclomatic limits)
+  if (payload) {
+    if (payload.job_id) {
+      if (payload.repo) {
+        if (payload.commit_sha) {
+          console.log(`Payload is valid for commit: ${payload.commit_sha}`);
+          if (payload.pr_number > 0) {
+            console.log(`PR number is: ${payload.pr_number}`);
+          }
+        }
+      }
+    }
+  }
 }
