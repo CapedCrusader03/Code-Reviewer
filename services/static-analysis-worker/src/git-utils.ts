@@ -13,7 +13,8 @@ import * as path from 'path';
 export async function cloneRepo(repo: string, sha: string, dest: string): Promise<void> {
   // Normalize repo URL
   let repoUrl = repo;
-  if (!repoUrl.startsWith('http://') && !repoUrl.startsWith('https://') && !repoUrl.startsWith('git@')) {
+  const isLocalPath = /^[a-zA-Z]:[/\\]/.test(repo) || repo.startsWith('/') || repo.startsWith('\\');
+  if (!isLocalPath && !repoUrl.startsWith('http://') && !repoUrl.startsWith('https://') && !repoUrl.startsWith('git@')) {
     // Assume GitHub format: user/repo
     repoUrl = `https://github.com/${repo}.git`;
   }
