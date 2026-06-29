@@ -87,7 +87,7 @@ async function run() {
 
     // 2. Get git diff of the buggy-util change
     // Using forward slashes for Windows paths compatibility in Node
-    const diff = execSync('git diff HEAD~1 HEAD -- services/webhook-service/src/buggy-util.ts services/webhook-service/src/server.ts').toString();
+    const diff = execSync('git diff HEAD~3 HEAD -- services/webhook-service/src/buggy-util.ts services/webhook-service/src/server.ts').toString();
     console.log(`Generated diff of changes (${diff.length} chars)\n`);
 
     // 3. Connect to local database
